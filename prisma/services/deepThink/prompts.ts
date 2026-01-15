@@ -32,13 +32,39 @@ If you ARE satisfied:
 2. Leave refined_experts empty.
 `;
 
-export const getExpertSystemInstruction = (role: string, description: string, context: string) => {
-  return `You are a ${role}. ${description}. Context: ${context}`;
+export const getResearchInstructions = (focus?: string) => {
+  const cleanedFocus = focus?.trim();
+  const focusLine = cleanedFocus ? `Research focus: ${cleanedFocus}` : 'Research focus: not specified.';
+
+  return `Research mode is enabled. Prioritize scientific rigor and transparency.
+- Separate evidence from assumptions.
+- Cite sources with DOI or URL when available; do not fabricate references. Mark uncertain citations as "needs verification".
+- Provide structured output: Summary, Methods/Approach, Evidence/Citations, Limitations, Next Steps.
+- Ask clarifying questions if key experimental details or data are missing.
+${focusLine}`;
 };
 
-export const getSynthesisPrompt = (recentHistory: string, query: string, expertResults: ExpertResult[]) => {
+export const getExpertSystemInstruction = (
+  role: string,
+  description: string,
+  context: string,
+  researchInstruction?: string
+) => {
+  const baseInstruction = `You are a ${role}. ${description}. Context: ${context}`;
+  return researchInstruction ? `${baseInstruction}\n\n${researchInstruction}` : baseInstruction;
+};
+
+export const getSynthesisPrompt = (
+  recentHistory: string,
+  query: string,
+  expertResults: ExpertResult[],
+  researchInstruction?: string
+) => {
+  const researchNote = researchInstruction ? `\nResearch Mode Guidelines:\n${researchInstruction}\n` : '';
+
   return `
 You are the "Synthesis Engine". 
+${researchNote}
 
 Context:
 ${recentHistory}

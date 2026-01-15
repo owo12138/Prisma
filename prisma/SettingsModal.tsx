@@ -7,6 +7,7 @@ import ModelSection from './components/settings/ModelSection';
 import ThinkingSection from './components/settings/ThinkingSection';
 import GithubSection from './components/settings/GithubSection';
 import LogSection from './components/settings/LogSection';
+import ResearchSection from './components/settings/ResearchSection';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -50,6 +51,8 @@ const SettingsModal = ({
             setConfig={setConfig}
             model={model}
           />
+
+          <ResearchSection config={config} setConfig={setConfig} />
           
           <LogSection />
 

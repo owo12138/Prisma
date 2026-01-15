@@ -17,10 +17,14 @@ export const executeManagerAnalysis = async (
   query: string,
   context: string,
   attachments: MessageAttachment[],
-  budget: number
+  budget: number,
+  researchInstruction?: string
 ): Promise<AnalysisResult> => {
   const isGoogle = isGoogleProvider(ai);
   const textPrompt = `Context:\n${context}\n\nCurrent Query: "${query}"`;
+  const systemInstruction = researchInstruction
+    ? `${MANAGER_SYSTEM_PROMPT}\n\n${researchInstruction}`
+    : MANAGER_SYSTEM_PROMPT;
 
   if (isGoogle) {
     const managerSchema = {
@@ -65,7 +69,7 @@ export const executeManagerAnalysis = async (
         model: model,
         contents: contents,
         config: {
-          systemInstruction: MANAGER_SYSTEM_PROMPT,
+          systemInstruction,
           responseMimeType: "application/json",
           responseSchema: managerSchema,
           thinkingConfig: {
@@ -121,7 +125,7 @@ export const executeManagerAnalysis = async (
 
       const response = await generateOpenAIContent(ai, {
         model,
-        systemInstruction: MANAGER_SYSTEM_PROMPT,
+        systemInstruction,
         content: contentPayload,
         temperature: 0.7,
         responseFormat: 'json_object',
@@ -151,7 +155,8 @@ export const executeManagerReview = async (
   model: ModelOption,
   query: string,
   currentExperts: ExpertResult[],
-  budget: number
+  budget: number,
+  researchInstruction?: string
 ): Promise<ReviewResult> => {
   const isGoogle = isGoogleProvider(ai);
   const expertOutputs = currentExperts.map(e =>
@@ -159,6 +164,9 @@ export const executeManagerReview = async (
   ).join('\n\n');
 
   const content = `User Query: "${query}"\n\nCurrent Expert Outputs:\n${expertOutputs}`;
+  const systemInstruction = researchInstruction
+    ? `${MANAGER_REVIEW_SYSTEM_PROMPT}\n\n${researchInstruction}`
+    : MANAGER_REVIEW_SYSTEM_PROMPT;
 
   if (isGoogle) {
     const reviewSchema = {
@@ -190,7 +198,7 @@ export const executeManagerReview = async (
         model: model,
         contents: content,
         config: {
-          systemInstruction: MANAGER_REVIEW_SYSTEM_PROMPT,
+          systemInstruction,
           responseMimeType: "application/json",
           responseSchema: reviewSchema,
           thinkingConfig: {
@@ -211,7 +219,7 @@ export const executeManagerReview = async (
     try {
       const response = await generateOpenAIContent(ai, {
         model,
-        systemInstruction: MANAGER_REVIEW_SYSTEM_PROMPT,
+        systemInstruction,
         content: `${content}\n\nReturn a JSON response with this structure:\n{\n  "satisfied": boolean,\n  "critique": "...",\n  "next_round_strategy": "...",\n  "refined_experts": [...]\n}`,
         temperature: 0.7,
         responseFormat: 'json_object',

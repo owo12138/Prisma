@@ -9,6 +9,7 @@ import { streamExpertResponse } from '../services/deepThink/expert';
 import { streamSynthesisResponse } from '../services/deepThink/synthesis';
 import { useDeepThinkState } from './useDeepThinkState';
 import { logger } from '../services/logger';
+import { getResearchInstructions } from '../services/deepThink/prompts';
 
 export const useDeepThink = () => {
   const {
@@ -38,7 +39,8 @@ export const useDeepThink = () => {
     context: string,
     attachments: MessageAttachment[],
     budget: number,
-    signal: AbortSignal
+    signal: AbortSignal,
+    researchInstruction: string | undefined
   ): Promise<ExpertResult> => {
     if (signal.aborted) return expert;
 
@@ -58,6 +60,7 @@ export const useDeepThink = () => {
         attachments,
         budget,
         signal,
+        researchInstruction,
         (textChunk, thoughtChunk) => {
           fullContent += textChunk;
           fullThoughts += thoughtChunk;
@@ -118,6 +121,9 @@ export const useDeepThink = () => {
       apiKey: customModelConfig?.apiKey || config.customApiKey,
       baseUrl: customModelConfig?.baseUrl || config.customBaseUrl
     });
+    const researchInstruction = config.enableResearchMode
+      ? getResearchInstructions(config.researchFocus)
+      : undefined;
 
     try {
       // Get the last message (which is the user's current query) to retrieve attachments
@@ -137,7 +143,8 @@ export const useDeepThink = () => {
         query, 
         recentHistory,
         currentAttachments,
-        getThinkingBudget(config.planningLevel, model)
+        getThinkingBudget(config.planningLevel, model),
+        researchInstruction
       );
 
       const primaryExpert: ExpertResult = {
@@ -155,7 +162,9 @@ export const useDeepThink = () => {
       // Primary expert sees the images
       const primaryTask = runExpertLifecycle(
         primaryExpert, 0, ai, model, recentHistory, currentAttachments,
-        getThinkingBudget(config.expertLevel, model), signal
+        getThinkingBudget(config.expertLevel, model),
+        signal,
+        researchInstruction
       );
 
       const analysisJson = await managerTask;
@@ -179,7 +188,9 @@ export const useDeepThink = () => {
       // For now, let's pass them to ensure they have full context.
       const round1Tasks = round1Experts.map((exp, idx) => 
         runExpertLifecycle(exp, idx + 1, ai, model, recentHistory, currentAttachments,
-           getThinkingBudget(config.expertLevel, model), signal)
+           getThinkingBudget(config.expertLevel, model),
+           signal,
+           researchInstruction)
       );
 
       await Promise.all([primaryTask, ...round1Tasks]);
@@ -197,7 +208,8 @@ export const useDeepThink = () => {
           
           const reviewResult = await executeManagerReview(
             ai, model, query, expertsDataRef.current,
-            getThinkingBudget(config.planningLevel, model)
+            getThinkingBudget(config.planningLevel, model),
+            researchInstruction
           );
 
           if (signal.aborted) return;
@@ -224,7 +236,9 @@ export const useDeepThink = () => {
 
              const nextRoundTasks = nextRoundExperts.map((exp, idx) => 
                 runExpertLifecycle(exp, startIndex + idx, ai, model, recentHistory, currentAttachments,
-                   getThinkingBudget(config.expertLevel, model), signal)
+                   getThinkingBudget(config.expertLevel, model),
+                   signal,
+                   researchInstruction)
              );
 
              await Promise.all(nextRoundTasks);
@@ -243,7 +257,9 @@ export const useDeepThink = () => {
       await streamSynthesisResponse(
         ai, model, query, recentHistory, expertsDataRef.current,
         currentAttachments,
-        getThinkingBudget(config.synthesisLevel, model), signal,
+        getThinkingBudget(config.synthesisLevel, model),
+        signal,
+        researchInstruction,
         (textChunk, thoughtChunk) => {
             fullFinalText += textChunk;
             fullFinalThoughts += thoughtChunk;
