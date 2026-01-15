@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Trash2, Activity } from 'lucide-react';
+import { Download, Trash2, Activity } from 'lucide-react';
 import { logger } from '../../services/logger';
 
 const LogSection = () => {

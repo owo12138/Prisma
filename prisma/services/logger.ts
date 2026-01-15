@@ -16,19 +16,22 @@ class LoggerService {
 
   constructor() {
     // Attempt to restore logs from sessionStorage on load (optional persistence)
-    try {
-      const saved = sessionStorage.getItem('prisma_logs');
-      if (saved) {
-        this.logs = JSON.parse(saved);
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem('prisma_logs');
+        if (saved) {
+          this.logs = JSON.parse(saved);
+        }
+      } catch (e) {
+        console.warn('Failed to restore logs');
       }
-    } catch (e) {
-      console.warn('Failed to restore logs');
     }
     
     this.info('System', 'Logger service initialized');
   }
 
   private persist() {
+    if (typeof sessionStorage === 'undefined') return;
     try {
       sessionStorage.setItem('prisma_logs', JSON.stringify(this.logs.slice(-500))); // Persist last 500 only
     } catch (e) {
@@ -63,8 +66,8 @@ class LoggerService {
 
   // Circular reference replacer for JSON
   private replacer(key: string, value: any) {
-    if (key === 'apiKey') return '***REDACTED***';
-    if (key === 'auth') return '***REDACTED***';
+    const redactedKeys = new Set(['apiKey', 'auth', 'customApiKey', 'customBaseUrl']);
+    if (redactedKeys.has(key)) return '***REDACTED***';
     return value;
   }
 
