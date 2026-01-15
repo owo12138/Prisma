@@ -17,10 +17,12 @@ export const executeManagerAnalysis = async (
   query: string,
   context: string,
   attachments: MessageAttachment[],
-  budget: number
+  budget: number,
+  availableModels: ModelOption[]
 ): Promise<AnalysisResult> => {
   const isGoogle = isGoogleProvider(ai);
-  const textPrompt = `Context:\n${context}\n\nCurrent Query: "${query}"`;
+  const modelsList = availableModels.length > 0 ? availableModels.join(', ') : 'No models available';
+  const textPrompt = `Context:\n${context}\n\nAvailable Models: ${modelsList}\n\nCurrent Query: "${query}"`;
 
   if (isGoogle) {
     const managerSchema = {
@@ -35,9 +37,14 @@ export const executeManagerAnalysis = async (
               role: { type: Type.STRING },
               description: { type: Type.STRING },
               temperature: { type: Type.NUMBER },
-              prompt: { type: Type.STRING }
+              prompt: { type: Type.STRING },
+              models: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: "2-3 model names from the available models list."
+              }
             },
-            required: ["role", "description", "temperature", "prompt"]
+            required: ["role", "description", "temperature", "prompt", "models"]
           }
         }
       },
@@ -111,7 +118,7 @@ export const executeManagerAnalysis = async (
       // Append formatting instruction to prompt if needed (OpenAI sometimes needs this explicit in text)
       // but usually responseFormat: json_object + system prompt is enough.
       // We append it to the text part or the string.
-      const jsonInstruction = `\n\nReturn a JSON response with this structure:\n{\n  "thought_process": "...",\n  "experts": [\n    { "role": "...", "description": "...", "temperature": number, "prompt": "..." }\n  ]\n}`;
+      const jsonInstruction = `\n\nReturn a JSON response with this structure:\n{\n  "thought_process": "...",\n  "experts": [\n    { "role": "...", "description": "...", "temperature": number, "prompt": "...", "models": ["model-a", "model-b"] }\n  ]\n}`;
       
       if (Array.isArray(contentPayload)) {
          contentPayload[0].text += jsonInstruction;

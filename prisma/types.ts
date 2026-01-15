@@ -17,6 +17,7 @@ export type ExpertConfig = {
   description: string;
   temperature: number;
   prompt: string;
+  models?: ModelOption[];
 };
 
 export type ExpertResult = ExpertConfig & {
@@ -27,6 +28,7 @@ export type ExpertResult = ExpertConfig & {
   startTime?: number;
   endTime?: number;
   round?: number; // Track which iteration this expert belongs to
+  model?: ModelOption;
 };
 
 export type AnalysisResult = {

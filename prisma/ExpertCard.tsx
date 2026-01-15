@@ -48,6 +48,7 @@ const ExpertCard = ({ expert }: { expert: ExpertResult }) => {
   const isPending = expert.status === 'pending';
   const isError = expert.status === 'error';
   const round = expert.round || 1;
+  const modelLabel = expert.model;
 
   // Auto-switch to thoughts if that's all we have so far
   React.useEffect(() => {
@@ -75,6 +76,11 @@ const ExpertCard = ({ expert }: { expert: ExpertResult }) => {
           <div className="flex items-center justify-between mb-0.5">
             <div className="flex items-center gap-2">
                <h3 className="text-sm font-bold text-slate-800 leading-tight truncate">{expert.role}</h3>
+               {modelLabel && (
+                 <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[9px] font-semibold uppercase tracking-wider border border-slate-200">
+                   {modelLabel}
+                 </div>
+               )}
                {round > 1 && (
                  <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-[9px] font-bold uppercase tracking-wider border border-indigo-200">
                     <Repeat size={8} />
