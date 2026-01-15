@@ -1,8 +1,8 @@
 
 import { useCallback } from 'react';
 import { getAI, getAIProvider, findCustomModel } from '../api';
-import { getThinkingBudget } from '../config';
-import { AppConfig, ModelOption, ExpertResult, ChatMessage, MessageAttachment } from '../types';
+import { getAllModels, getThinkingBudget } from '../config';
+import { AppConfig, ModelOption, ExpertResult, ChatMessage, MessageAttachment, ExpertConfig } from '../types';
 
 import { executeManagerAnalysis, executeManagerReview } from '../services/deepThink/manager';
 import { streamExpertResponse } from '../services/deepThink/expert';
@@ -110,14 +110,25 @@ export const useDeepThink = () => {
     setProcessStartTime(Date.now());
     setProcessEndTime(null);
     
-    const customModelConfig = findCustomModel(model, config.customModels);
-    const provider = customModelConfig?.provider || getAIProvider(model);
+    const aiCache = new Map<ModelOption, any>();
+    const availableModels = getAllModels(config).map((entry) => entry.value);
 
-    const ai = getAI({
-      provider,
-      apiKey: customModelConfig?.apiKey || config.customApiKey,
-      baseUrl: customModelConfig?.baseUrl || config.customBaseUrl
-    });
+    const getAIForModel = (targetModel: ModelOption) => {
+      if (aiCache.has(targetModel)) {
+        return aiCache.get(targetModel);
+      }
+      const customModelConfig = findCustomModel(targetModel, config.customModels);
+      const provider = customModelConfig?.provider || getAIProvider(targetModel);
+      const aiInstance = getAI({
+        provider,
+        apiKey: customModelConfig?.apiKey || config.customApiKey,
+        baseUrl: customModelConfig?.baseUrl || config.customBaseUrl
+      });
+      aiCache.set(targetModel, aiInstance);
+      return aiInstance;
+    };
+
+    const ai = getAIForModel(model);
 
     try {
       // Get the last message (which is the user's current query) to retrieve attachments
@@ -137,7 +148,8 @@ export const useDeepThink = () => {
         query, 
         recentHistory,
         currentAttachments,
-        getThinkingBudget(config.planningLevel, model)
+        getThinkingBudget(config.planningLevel, model),
+        availableModels
       );
 
       const primaryExpert: ExpertResult = {
@@ -147,7 +159,8 @@ export const useDeepThink = () => {
         temperature: 1, 
         prompt: query, 
         status: 'pending',
-        round: 1
+        round: 1,
+        model
       };
 
       setInitialExperts([primaryExpert]);
@@ -163,12 +176,27 @@ export const useDeepThink = () => {
       setManagerAnalysis(analysisJson);
       logger.info('Manager', 'Plan generated', analysisJson);
 
-      const round1Experts: ExpertResult[] = analysisJson.experts.map((exp, idx) => ({
-        ...exp,
-        id: `expert-r1-${idx + 1}`,
-        status: 'pending',
-        round: 1
-      }));
+      const availableModelSet = new Set<ModelOption>(availableModels);
+      const normalizeExpertModels = (expertModels: ModelOption[] | undefined) => {
+        const models = (expertModels || [model]).filter((entry) => availableModelSet.has(entry));
+        if (models.length === 0) return [model];
+        return models.slice(0, 3);
+      };
+
+      const expandExpertsWithModels = (expertsInput: Omit<ExpertConfig, 'id'>[]) => {
+        return expertsInput.flatMap((exp, idx) => {
+          const modelsForExpert = normalizeExpertModels(exp.models);
+          return modelsForExpert.map((modelName, modelIndex) => ({
+            ...exp,
+            id: `expert-r1-${idx + 1}-${modelIndex + 1}`,
+            status: 'pending' as const,
+            round: 1,
+            model: modelName
+          }));
+        });
+      };
+
+      const round1Experts: ExpertResult[] = expandExpertsWithModels(analysisJson.experts);
 
       appendExperts(round1Experts);
       setAppState('experts_working');
@@ -177,10 +205,19 @@ export const useDeepThink = () => {
       // but for simplicity/consistency we pass them if the model supports it.
       // However, to save tokens/bandwidth, we might limit this.
       // For now, let's pass them to ensure they have full context.
-      const round1Tasks = round1Experts.map((exp, idx) => 
-        runExpertLifecycle(exp, idx + 1, ai, model, recentHistory, currentAttachments,
-           getThinkingBudget(config.expertLevel, model), signal)
-      );
+      const round1Tasks = round1Experts.map((exp, idx) => {
+        const expertModel = exp.model || model;
+        return runExpertLifecycle(
+          exp,
+          idx + 1,
+          getAIForModel(expertModel),
+          expertModel,
+          recentHistory,
+          currentAttachments,
+          getThinkingBudget(config.expertLevel, expertModel),
+          signal
+        );
+      });
 
       await Promise.all([primaryTask, ...round1Tasks]);
       if (signal.aborted) return;
@@ -208,9 +245,16 @@ export const useDeepThink = () => {
             loopActive = false;
           } else {
              roundCounter++;
-             const nextRoundExperts = (reviewResult.refined_experts || []).map((exp, idx) => ({
-                ...exp, id: `expert-r${roundCounter}-${idx}`, status: 'pending' as const, round: roundCounter
-             }));
+             const nextRoundExperts = (reviewResult.refined_experts || []).flatMap((exp, idx) => {
+                const modelsForExpert = normalizeExpertModels(exp.models);
+                return modelsForExpert.map((modelName, modelIndex) => ({
+                  ...exp,
+                  id: `expert-r${roundCounter}-${idx}-${modelIndex}`,
+                  status: 'pending' as const,
+                  round: roundCounter,
+                  model: modelName
+                }));
+             });
 
              if (nextRoundExperts.length === 0) {
                  logger.warn('Manager', 'Not satisfied but no new experts proposed. Breaking loop.');
@@ -222,10 +266,19 @@ export const useDeepThink = () => {
              appendExperts(nextRoundExperts);
              setAppState('experts_working');
 
-             const nextRoundTasks = nextRoundExperts.map((exp, idx) => 
-                runExpertLifecycle(exp, startIndex + idx, ai, model, recentHistory, currentAttachments,
-                   getThinkingBudget(config.expertLevel, model), signal)
-             );
+             const nextRoundTasks = nextRoundExperts.map((exp, idx) => {
+                const expertModel = exp.model || model;
+                return runExpertLifecycle(
+                  exp,
+                  startIndex + idx,
+                  getAIForModel(expertModel),
+                  expertModel,
+                  recentHistory,
+                  currentAttachments,
+                  getThinkingBudget(config.expertLevel, expertModel),
+                  signal
+                );
+             });
 
              await Promise.all(nextRoundTasks);
           }

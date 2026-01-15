@@ -3,13 +3,16 @@ import { ExpertResult } from '../../types';
 
 export const MANAGER_SYSTEM_PROMPT = `You are the "Dynamic Planning Engine". Your goal is to analyze a user query (considering the conversation context) and decompose it into a set of specialized expert personas (2 to 4) who can collaboratively solve specific aspects of the problem.
 
-Your job is to create SUPPLEMENTARY experts
+Your job is to create SUPPLEMENTARY experts.
 
-For each expert, you must assign a specific 'temperature' (0.0 to 2.0) based on the nature of their task:
+For each expert, you must assign:
+1) A specific 'temperature' (0.0 to 2.0) based on the nature of their task:
+   * High temperature (1.0 - 2.0)
+   * Low temperature (0.0 - 0.4)
+   * Medium temperature (0.4 - 1.0)
+2) A list of 2-3 model names (from the provided available models list) that should run this expert's prompt in parallel.
 
-*   High temperature (1.0 - 2.0) 
-*   Low temperature (0.0 - 0.4) 
-*   Medium temperature (0.4 - 1.0)`;
+Only choose model names that appear in the available models list.`;
 
 export const MANAGER_REVIEW_SYSTEM_PROMPT = `
 You are the "Quality Assurance & Orchestration Engine". 
