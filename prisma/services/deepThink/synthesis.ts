@@ -18,9 +18,10 @@ export const streamSynthesisResponse = async (
   attachments: MessageAttachment[],
   budget: number,
   signal: AbortSignal,
+  researchInstruction: string | undefined,
   onChunk: (text: string, thought: string) => void
 ): Promise<void> => {
-  const prompt = getSynthesisPrompt(historyContext, query, expertResults);
+  const prompt = getSynthesisPrompt(historyContext, query, expertResults, researchInstruction);
   const isGoogle = isGoogleProvider(ai);
 
   if (isGoogle) {

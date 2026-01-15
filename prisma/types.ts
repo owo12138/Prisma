@@ -53,6 +53,8 @@ export type AppConfig = {
   enableRecursiveLoop?: boolean;
   apiProvider?: ApiProvider;
   customModels?: CustomModel[];
+  enableResearchMode?: boolean;
+  researchFocus?: string;
 };
 
 export type MessageAttachment = {

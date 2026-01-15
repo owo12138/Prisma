@@ -17,6 +17,7 @@ export const streamExpertResponse = async (
   attachments: MessageAttachment[],
   budget: number,
   signal: AbortSignal,
+  researchInstruction: string | undefined,
   onChunk: (text: string, thought: string) => void
 ): Promise<void> => {
   const isGoogle = isGoogleProvider(ai);
@@ -42,7 +43,12 @@ export const streamExpertResponse = async (
       model: model,
       contents: contents,
       config: {
-        systemInstruction: getExpertSystemInstruction(expert.role, expert.description, context),
+        systemInstruction: getExpertSystemInstruction(
+          expert.role,
+          expert.description,
+          context,
+          researchInstruction
+        ),
         temperature: expert.temperature,
         thinkingConfig: {
           thinkingBudget: budget,
@@ -92,7 +98,12 @@ export const streamExpertResponse = async (
 
     const stream = generateOpenAIStream(ai, {
       model,
-      systemInstruction: getExpertSystemInstruction(expert.role, expert.description, context),
+      systemInstruction: getExpertSystemInstruction(
+        expert.role,
+        expert.description,
+        context,
+        researchInstruction
+      ),
       content: contentPayload,
       temperature: expert.temperature,
       thinkingConfig: {

@@ -37,7 +37,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   enableCustomApi: false,
   enableRecursiveLoop: false,
   apiProvider: 'google',
-  customModels: []
+  customModels: [],
+  enableResearchMode: false,
+  researchFocus: ''
 };
 
 export const getValidThinkingLevels = (model: ModelOption): ThinkingLevel[] => {
