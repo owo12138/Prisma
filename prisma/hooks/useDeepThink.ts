@@ -80,8 +80,18 @@ export const useDeepThink = () => {
        if (!signal.aborted) {
            updateExpertAt(globalIndex, { status: 'error', content: "Failed to generate response.", endTime: Date.now() });
        }
-       return expertsDataRef.current[globalIndex];
+    return expertsDataRef.current[globalIndex];
     }
+  };
+
+  const buildContext = (recentHistory: string, imageSummary: string) => {
+    if (!imageSummary.trim()) return recentHistory;
+    return `${recentHistory}\n\nImage Summary:\n${imageSummary}`;
+  };
+
+  const getExpertAttachments = (expert: ExpertResult, attachments: MessageAttachment[]) => {
+    if (!attachments.length) return [];
+    return expert.requiresImages ? attachments : [];
   };
 
   /**
@@ -124,21 +134,23 @@ export const useDeepThink = () => {
       const lastMessage = history[history.length - 1];
       const currentAttachments = lastMessage.role === 'user' ? (lastMessage.attachments || []) : [];
 
-      const recentHistory = history.slice(0, -1).slice(-5).map(msg => 
+      const recentHistory = history.slice(0, -1).slice(-5).map(msg =>
         `${msg.role === 'user' ? 'User' : 'Model'}: ${msg.content}`
       ).join('\n');
 
+      const imageSummaryExpert: ExpertResult | null = currentAttachments.length > 0 ? {
+        id: 'expert-vision-summary',
+        role: "Vision Summarizer",
+        description: "Summarizes attached images into a concise, structured briefing for downstream experts.",
+        temperature: 0.2,
+        prompt: "Summarize the attached images for other experts. Focus on concrete, factual details. Use concise bullet points.",
+        status: 'pending',
+        round: 1,
+        requiresImages: true
+      } : null;
+
       // --- Phase 1: Planning & Initial Experts ---
       logger.debug('Manager', 'Phase 1: Planning started');
-      
-      const managerTask = executeManagerAnalysis(
-        ai, 
-        model, 
-        query, 
-        recentHistory,
-        currentAttachments,
-        getThinkingBudget(config.planningLevel, model)
-      );
 
       const primaryExpert: ExpertResult = {
         id: 'expert-0',
@@ -147,15 +159,54 @@ export const useDeepThink = () => {
         temperature: 1, 
         prompt: query, 
         status: 'pending',
-        round: 1
+        round: 1,
+        requiresImages: currentAttachments.length > 0
       };
 
-      setInitialExperts([primaryExpert]);
+      if (imageSummaryExpert) {
+        setInitialExperts([imageSummaryExpert, primaryExpert]);
+      } else {
+        setInitialExperts([primaryExpert]);
+      }
 
-      // Primary expert sees the images
+      let imageSummary = '';
+      if (imageSummaryExpert) {
+        const summaryResult = await runExpertLifecycle(
+          imageSummaryExpert,
+          0,
+          ai,
+          model,
+          recentHistory,
+          currentAttachments,
+          getThinkingBudget(config.expertLevel, model),
+          signal
+        );
+        imageSummary = summaryResult.content || '';
+      }
+
+      if (signal.aborted) return;
+
+      const expertStartIndex = imageSummaryExpert ? 1 : 0;
+      const enrichedContext = buildContext(recentHistory, imageSummary);
+
+      const managerTask = executeManagerAnalysis(
+        ai,
+        model,
+        query,
+        enrichedContext,
+        currentAttachments,
+        getThinkingBudget(config.planningLevel, model)
+      );
+
       const primaryTask = runExpertLifecycle(
-        primaryExpert, 0, ai, model, recentHistory, currentAttachments,
-        getThinkingBudget(config.expertLevel, model), signal
+        primaryExpert,
+        expertStartIndex,
+        ai,
+        model,
+        enrichedContext,
+        getExpertAttachments(primaryExpert, currentAttachments),
+        getThinkingBudget(config.expertLevel, model),
+        signal
       );
 
       const analysisJson = await managerTask;
@@ -167,19 +218,23 @@ export const useDeepThink = () => {
         ...exp,
         id: `expert-r1-${idx + 1}`,
         status: 'pending',
-        round: 1
+        round: 1,
+        requiresImages: exp.requiresImages ?? false
       }));
 
       appendExperts(round1Experts);
       setAppState('experts_working');
-
-      // Supplementary experts usually don't need the images unless specified, 
-      // but for simplicity/consistency we pass them if the model supports it.
-      // However, to save tokens/bandwidth, we might limit this.
-      // For now, let's pass them to ensure they have full context.
       const round1Tasks = round1Experts.map((exp, idx) => 
-        runExpertLifecycle(exp, idx + 1, ai, model, recentHistory, currentAttachments,
-           getThinkingBudget(config.expertLevel, model), signal)
+        runExpertLifecycle(
+          exp,
+          idx + 1 + expertStartIndex,
+          ai,
+          model,
+          enrichedContext,
+          getExpertAttachments(exp, currentAttachments),
+          getThinkingBudget(config.expertLevel, model),
+          signal
+        )
       );
 
       await Promise.all([primaryTask, ...round1Tasks]);
@@ -209,7 +264,11 @@ export const useDeepThink = () => {
           } else {
              roundCounter++;
              const nextRoundExperts = (reviewResult.refined_experts || []).map((exp, idx) => ({
-                ...exp, id: `expert-r${roundCounter}-${idx}`, status: 'pending' as const, round: roundCounter
+                ...exp,
+                id: `expert-r${roundCounter}-${idx}`,
+                status: 'pending' as const,
+                round: roundCounter,
+                requiresImages: exp.requiresImages ?? false
              }));
 
              if (nextRoundExperts.length === 0) {
@@ -222,9 +281,17 @@ export const useDeepThink = () => {
              appendExperts(nextRoundExperts);
              setAppState('experts_working');
 
-             const nextRoundTasks = nextRoundExperts.map((exp, idx) => 
-                runExpertLifecycle(exp, startIndex + idx, ai, model, recentHistory, currentAttachments,
-                   getThinkingBudget(config.expertLevel, model), signal)
+             const nextRoundTasks = nextRoundExperts.map((exp, idx) =>
+                runExpertLifecycle(
+                  exp,
+                  startIndex + idx,
+                  ai,
+                  model,
+                  enrichedContext,
+                  getExpertAttachments(exp, currentAttachments),
+                  getThinkingBudget(config.expertLevel, model),
+                  signal
+                )
              );
 
              await Promise.all(nextRoundTasks);
@@ -241,9 +308,14 @@ export const useDeepThink = () => {
       let fullFinalThoughts = '';
 
       await streamSynthesisResponse(
-        ai, model, query, recentHistory, expertsDataRef.current,
-        currentAttachments,
-        getThinkingBudget(config.synthesisLevel, model), signal,
+        ai,
+        model,
+        query,
+        enrichedContext,
+        expertsDataRef.current,
+        [],
+        getThinkingBudget(config.synthesisLevel, model),
+        signal,
         (textChunk, thoughtChunk) => {
             fullFinalText += textChunk;
             fullFinalThoughts += thoughtChunk;

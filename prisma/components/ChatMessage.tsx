@@ -103,9 +103,9 @@ const ChatMessageItem = ({ message, isLast }: ChatMessageProps) => {
           )}
 
           {/* Attachments */}
-          {message.attachments && message.attachments.length > 0 && (
+          {message.attachments && message.attachments.some(att => att.url || att.data) && (
             <div className="flex flex-wrap gap-2 mb-3">
-              {message.attachments.map(att => (
+              {message.attachments.filter(att => att.url || att.data).map(att => (
                  <img 
                    key={att.id} 
                    src={att.url || `data:${att.mimeType};base64,${att.data}`}

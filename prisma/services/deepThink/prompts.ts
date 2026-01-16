@@ -9,7 +9,9 @@ For each expert, you must assign a specific 'temperature' (0.0 to 2.0) based on 
 
 *   High temperature (1.0 - 2.0) 
 *   Low temperature (0.0 - 0.4) 
-*   Medium temperature (0.4 - 1.0)`;
+*   Medium temperature (0.4 - 1.0)
+
+Also decide if each expert truly needs access to image attachments. Set "requires_images" to true only when the expert must directly inspect the images. Otherwise set it to false.`;
 
 export const MANAGER_REVIEW_SYSTEM_PROMPT = `
 You are the "Quality Assurance & Orchestration Engine". 
@@ -26,6 +28,7 @@ If you are NOT satisfied:
 1. Provide a "critique" explaining exactly what is missing or wrong.
 2. Define a "next_round_strategy" (briefly) to fix it.
 3. Define the *refined_experts* for the next round. You can keep the same roles or create new ones. Their prompts MUST include the feedback/critique.
+4. For each refined expert, set "requires_images" to true only if they must inspect image attachments.
 
 If you ARE satisfied:
 1. Set satisfied to true.

@@ -7,6 +7,23 @@ import { useChatSessions } from './useChatSessions';
 import { setInterceptorUrl } from '../interceptor';
 import { logger } from '../services/logger';
 
+const sanitizeConfigForStorage = (config: AppConfig): AppConfig => ({
+  ...config,
+  customApiKey: '',
+  customModels: config.customModels?.map(({ apiKey, ...model }) => ({
+    ...model
+  }))
+});
+
+const sanitizeConfigForLogging = (config: AppConfig): AppConfig => ({
+  ...config,
+  customApiKey: config.customApiKey ? '***REDACTED***' : '',
+  customModels: config.customModels?.map((model) => ({
+    ...model,
+    apiKey: model.apiKey ? '***REDACTED***' : undefined
+  }))
+});
+
 export const useAppLogic = () => {
   // Session Management
   const { 
@@ -72,8 +89,9 @@ export const useAppLogic = () => {
 
   // Persistence Effects
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(config));
-    logger.info('System', 'Settings updated', config);
+    const storageConfig = sanitizeConfigForStorage(config);
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(storageConfig));
+    logger.info('System', 'Settings updated', sanitizeConfigForLogging(config));
   }, [config]);
 
   useEffect(() => {

@@ -59,6 +59,14 @@ export const generateContent = async (
     temperature: config.temperature,
   };
 
+  if (config.thinkingConfig?.thinkingBudget && config.thinkingConfig.thinkingBudget > 0) {
+    if (config.model.startsWith('o1-')) {
+      requestOptions.max_completion_tokens = config.thinkingConfig.thinkingBudget;
+    } else {
+      requestOptions.max_tokens = config.thinkingConfig.thinkingBudget;
+    }
+  }
+
   if (config.responseFormat === 'json_object') {
     requestOptions.response_format = { type: 'json_object' };
   }
@@ -103,6 +111,14 @@ export async function* generateContentStream(
     temperature: config.temperature,
     stream: true,
   };
+
+  if (config.thinkingConfig?.thinkingBudget && config.thinkingConfig.thinkingBudget > 0) {
+    if (config.model.startsWith('o1-')) {
+      requestOptions.max_completion_tokens = config.thinkingConfig.thinkingBudget;
+    } else {
+      requestOptions.max_tokens = config.thinkingConfig.thinkingBudget;
+    }
+  }
 
   const stream = await withRetry(() => ai.chat.completions.create(requestOptions) as any);
 

@@ -14,7 +14,21 @@ export const useChatSessions = () => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   useEffect(() => {
-    localStorage.setItem('prisma-sessions', JSON.stringify(sessions));
+    const sanitizedSessions = sessions.map(session => ({
+      ...session,
+      messages: session.messages.map(message => {
+        if (!message.attachments || message.attachments.length === 0) return message;
+        return {
+          ...message,
+          attachments: message.attachments.map(att => ({
+            id: att.id,
+            type: att.type,
+            mimeType: att.mimeType
+          }))
+        };
+      })
+    }));
+    localStorage.setItem('prisma-sessions', JSON.stringify(sanitizedSessions));
   }, [sessions]);
 
   const getSession = useCallback((id: string) => {
