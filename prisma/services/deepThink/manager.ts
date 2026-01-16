@@ -35,7 +35,8 @@ export const executeManagerAnalysis = async (
               role: { type: Type.STRING },
               description: { type: Type.STRING },
               temperature: { type: Type.NUMBER },
-              prompt: { type: Type.STRING }
+              prompt: { type: Type.STRING },
+              requires_images: { type: Type.BOOLEAN }
             },
             required: ["role", "description", "temperature", "prompt"]
           }
@@ -78,11 +79,17 @@ export const executeManagerAnalysis = async (
       const rawText = (analysisResp as any).text || '{}';
       const cleanText = cleanJsonString(rawText);
 
-      const analysisJson = JSON.parse(cleanText) as AnalysisResult;
+      const analysisJson = JSON.parse(cleanText) as AnalysisResult & { experts?: Array<any> };
       if (!analysisJson.experts || !Array.isArray(analysisJson.experts)) {
         throw new Error("Invalid schema structure");
       }
-      return analysisJson;
+      return {
+        ...analysisJson,
+        experts: analysisJson.experts.map((expert) => ({
+          ...expert,
+          requiresImages: expert.requires_images ?? expert.requiresImages ?? false
+        }))
+      };
     } catch (e) {
       logger.error("Manager", "Analysis generation failed", e);
       return {
@@ -111,7 +118,7 @@ export const executeManagerAnalysis = async (
       // Append formatting instruction to prompt if needed (OpenAI sometimes needs this explicit in text)
       // but usually responseFormat: json_object + system prompt is enough.
       // We append it to the text part or the string.
-      const jsonInstruction = `\n\nReturn a JSON response with this structure:\n{\n  "thought_process": "...",\n  "experts": [\n    { "role": "...", "description": "...", "temperature": number, "prompt": "..." }\n  ]\n}`;
+      const jsonInstruction = `\n\nReturn a JSON response with this structure:\n{\n  "thought_process": "...",\n  "experts": [\n    { "role": "...", "description": "...", "temperature": number, "prompt": "...", "requires_images": boolean }\n  ]\n}`;
       
       if (Array.isArray(contentPayload)) {
          contentPayload[0].text += jsonInstruction;
@@ -131,11 +138,17 @@ export const executeManagerAnalysis = async (
         }
       });
 
-      const analysisJson = JSON.parse(response.text) as AnalysisResult;
+      const analysisJson = JSON.parse(response.text) as AnalysisResult & { experts?: Array<any> };
       if (!analysisJson.experts || !Array.isArray(analysisJson.experts)) {
         throw new Error("Invalid schema structure");
       }
-      return analysisJson;
+      return {
+        ...analysisJson,
+        experts: analysisJson.experts.map((expert) => ({
+          ...expert,
+          requiresImages: expert.requires_images ?? expert.requiresImages ?? false
+        }))
+      };
     } catch (e) {
       logger.error("Manager", "Analysis generation failed (OpenAI)", e);
       return {
@@ -176,7 +189,8 @@ export const executeManagerReview = async (
               role: { type: Type.STRING },
               description: { type: Type.STRING },
               temperature: { type: Type.NUMBER },
-              prompt: { type: Type.STRING }
+              prompt: { type: Type.STRING },
+              requires_images: { type: Type.BOOLEAN }
             },
             required: ["role", "description", "temperature", "prompt"]
           }
@@ -202,7 +216,14 @@ export const executeManagerReview = async (
 
       const rawText = (resp as any).text || '{}';
       const cleanText = cleanJsonString(rawText);
-      return JSON.parse(cleanText) as ReviewResult;
+      const reviewJson = JSON.parse(cleanText) as ReviewResult & { refined_experts?: Array<any> };
+      if (reviewJson.refined_experts && Array.isArray(reviewJson.refined_experts)) {
+        reviewJson.refined_experts = reviewJson.refined_experts.map((expert) => ({
+          ...expert,
+          requiresImages: expert.requires_images ?? expert.requiresImages ?? false
+        }));
+      }
+      return reviewJson;
     } catch (e) {
       logger.error("Manager", "Review generation failed", e);
       return { satisfied: true, critique: "Processing Error, proceeding to synthesis." };
@@ -212,7 +233,7 @@ export const executeManagerReview = async (
       const response = await generateOpenAIContent(ai, {
         model,
         systemInstruction: MANAGER_REVIEW_SYSTEM_PROMPT,
-        content: `${content}\n\nReturn a JSON response with this structure:\n{\n  "satisfied": boolean,\n  "critique": "...",\n  "next_round_strategy": "...",\n  "refined_experts": [...]\n}`,
+        content: `${content}\n\nReturn a JSON response with this structure:\n{\n  "satisfied": boolean,\n  "critique": "...",\n  "next_round_strategy": "...",\n  "refined_experts": [\n    { "role": "...", "description": "...", "temperature": number, "prompt": "...", "requires_images": boolean }\n  ]\n}`,
         temperature: 0.7,
         responseFormat: 'json_object',
         thinkingConfig: {
@@ -221,7 +242,14 @@ export const executeManagerReview = async (
         }
       });
 
-      return JSON.parse(response.text) as ReviewResult;
+      const reviewJson = JSON.parse(response.text) as ReviewResult & { refined_experts?: Array<any> };
+      if (reviewJson.refined_experts && Array.isArray(reviewJson.refined_experts)) {
+        reviewJson.refined_experts = reviewJson.refined_experts.map((expert) => ({
+          ...expert,
+          requiresImages: expert.requires_images ?? expert.requiresImages ?? false
+        }));
+      }
+      return reviewJson;
     } catch (e) {
       logger.error("Manager", "Review generation failed (OpenAI)", e);
       return { satisfied: true, critique: "Processing Error, proceeding to synthesis." };

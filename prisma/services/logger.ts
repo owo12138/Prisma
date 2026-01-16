@@ -63,7 +63,12 @@ class LoggerService {
 
   // Circular reference replacer for JSON
   private replacer(key: string, value: any) {
-    if (key === 'apiKey') return '***REDACTED***';
+    if (typeof key === 'string') {
+      const normalizedKey = key.toLowerCase();
+      if (normalizedKey.includes('apikey') || normalizedKey.includes('authorization') || normalizedKey.includes('token')) {
+        return '***REDACTED***';
+      }
+    }
     if (key === 'auth') return '***REDACTED***';
     return value;
   }

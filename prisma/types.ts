@@ -17,6 +17,7 @@ export type ExpertConfig = {
   description: string;
   temperature: number;
   prompt: string;
+  requiresImages?: boolean;
 };
 
 export type ExpertResult = ExpertConfig & {
