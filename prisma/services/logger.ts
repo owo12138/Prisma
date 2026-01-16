@@ -63,8 +63,8 @@ class LoggerService {
 
   // Circular reference replacer for JSON
   private replacer(key: string, value: any) {
-    if (key === 'apiKey') return '***REDACTED***';
-    if (key === 'auth') return '***REDACTED***';
+    if (/apiKey/i.test(key)) return '***REDACTED***';
+    if (key === 'auth' || key === 'authorization') return '***REDACTED***';
     return value;
   }
 
