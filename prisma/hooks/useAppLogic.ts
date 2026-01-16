@@ -60,6 +60,19 @@ export const useAppLogic = () => {
     processEndTime
   } = useDeepThink();
 
+  const sanitizeConfigForStorage = useCallback((currentConfig: AppConfig) => {
+    const sanitizedCustomModels = (currentConfig.customModels || []).map(model => ({
+      ...model,
+      apiKey: ''
+    }));
+
+    return {
+      ...currentConfig,
+      customApiKey: '',
+      customModels: sanitizedCustomModels
+    };
+  }, []);
+
   // Network Interceptor Sync
   useEffect(() => {
     if (config.enableCustomApi && config.customBaseUrl) {
@@ -72,9 +85,10 @@ export const useAppLogic = () => {
 
   // Persistence Effects
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(config));
-    logger.info('System', 'Settings updated', config);
-  }, [config]);
+    const safeConfig = sanitizeConfigForStorage(config);
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(safeConfig));
+    logger.info('System', 'Settings updated', safeConfig);
+  }, [config, sanitizeConfigForStorage]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.MODEL, selectedModel);

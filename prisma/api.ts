@@ -27,56 +27,10 @@ const PROVIDER_BASE_URLS: Record<string, string> = {
 // Check if we're in development mode
 const isDevelopment = import.meta.env?.MODE === 'development' || process.env.NODE_ENV === 'development';
 
-// Store the current custom API target URL
-let currentCustomApiUrl: string | null = null;
-
-// Setup fetch interceptor to add X-Target-URL header for custom API proxy
-const originalFetch = typeof window !== 'undefined' ? window.fetch.bind(window) : null;
-
-if (typeof window !== 'undefined' && originalFetch) {
-  const proxyFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    let urlString: string;
-    if (typeof input === 'string') {
-      urlString = input;
-    } else if (input instanceof URL) {
-      urlString = input.toString();
-    } else {
-      urlString = input.url;
-    }
-    
-    // If this is a custom-api request and we have a target URL, add the header
-    if (urlString.includes('/custom-api') && currentCustomApiUrl) {
-      const headers = new Headers(init?.headers);
-      headers.set('X-Target-URL', currentCustomApiUrl);
-      
-      logger.debug('API', 'Using Custom Proxy', { target: currentCustomApiUrl, path: urlString });
-      
-      return originalFetch(input, {
-        ...init,
-        headers,
-      });
-    }
-    
-    return originalFetch(input, init);
-  };
-
-  try {
-    window.fetch = proxyFetch;
-    logger.info('System', 'Fetch proxy interceptor installed');
-  } catch (e) {
-    try {
-      Object.defineProperty(window, 'fetch', {
-        value: proxyFetch,
-        writable: true,
-        configurable: true,
-        enumerable: true
-      });
-    } catch (e2) {
-      console.error('[API] Failed to intercept fetch:', e2);
-      logger.error('System', 'Failed to intercept fetch', e2);
-    }
-  }
-}
+const buildProxyHeaders = (targetUrl?: string) => {
+  if (!targetUrl) return undefined;
+  return { 'X-Target-URL': targetUrl };
+};
 
 export const getAI = (config?: AIProviderConfig) => {
   const provider = config?.provider || 'google';
@@ -91,8 +45,7 @@ export const getAI = (config?: AIProviderConfig) => {
     if (config?.baseUrl) {
       // Custom baseUrl from Configuration UI
       if (isDevelopment) {
-        // Store the target URL for the fetch interceptor
-        currentCustomApiUrl = config.baseUrl;
+        options.defaultHeaders = buildProxyHeaders(config.baseUrl);
         // Use proxy path
         options.baseURL = `${window.location.origin}/custom-api`;
       } else {
